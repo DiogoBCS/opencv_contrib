@@ -116,7 +116,14 @@ private:
   // for each pixel. In the second layer, there are the C (efficacy) value for each pixel
   Mat potentialBackground;// Two channel Matrix. For each pixel, in the first level there are the Ba value (potential background value)
                           // and in the secon level there are the Ca value, the counter for each potential value.
-  Mat epslonPixelsValue;  // epslon threshold
+  Mat epslonPixelsValue;// epslon threshold
+
+  Mat activityPixelsValue;// Activity level of each pixel
+  //vector<Mat> noisePixelMask; // We define a ‘noise-pixel’ as a pixel that has been classified as a foreground pixel during the full resolution
+  Mat noisePixelMask; // We define a ‘noise-pixel’ as a pixel that has been classified as a foreground pixel during the full resolution
+  //detection process,however, after the low resolution detection, it has become a
+  // background pixel. The matrix is  two-channel matrix. In the first layer there is the mask ( the identified noise-pixels are set to 1 while other pixels are 0)
+  // for each pixel. In the second layer, there is the value of activity level A for each pixel.
 
   //fixed parameter
   bool neighborhoodCheck;
@@ -133,7 +140,17 @@ private:
             // long-term template, regardless of any subsequent background changes. A relatively large (eg gamma=3) will
             //restrain the generation of ghosts.
 
+  int Ainc;// Activity Incrementation;
+  int Bmax;// Upper-bound value for pixel activity
+  int Bth;// Max activity threshold
+  int Binc, Bdec;// Threshold for pixel-level decision threshold (epslon) adaptation
+  int deltaINC, deltaDEC;// Increment-decrement value for epslon adaptation
+  int epslonMIN, epslonMAX;// Range values for epslon threshold
+
 };
+
+}
+;
 
 /************************************ Specific Objectness Specialized Classes ************************************/
 
@@ -145,150 +162,150 @@ class CV_EXPORTS ObjectnessBING : public Objectness
 {
 public:
 
-  ObjectnessBING();
-  virtual ~ObjectnessBING();
+ObjectnessBING();
+virtual ~ObjectnessBING();
 
-  void read();
-  void write() const;
+void read();
+void write() const;
 
-  std::vector<float> getobjectnessValues();
-  void setTrainingPath( std::string trainingPath );
-  void setBBResDir( std::string resultsDir );
+std::vector<float> getobjectnessValues();
+void setTrainingPath( std::string trainingPath );
+void setBBResDir( std::string resultsDir );
 
 protected:
-  bool computeSaliencyImpl( const InputArray image, OutputArray objectnessBoundingBox );
-  AlgorithmInfo* info() const;
+bool computeSaliencyImpl( const InputArray image, OutputArray objectnessBoundingBox );
+AlgorithmInfo* info() const;
 
 private:
 
-  class FilterTIG
-  {
-  public:
-    void update( Mat &w );
+class FilterTIG
+{
+public:
+  void update( Mat &w );
 
-    // For a W by H gradient magnitude map, find a W-7 by H-7 CV_32F matching score map
-    Mat matchTemplate( const Mat &mag1u );
+  // For a W by H gradient magnitude map, find a W-7 by H-7 CV_32F matching score map
+  Mat matchTemplate( const Mat &mag1u );
 
-    float dot( const int64_t tig1, const int64_t tig2, const int64_t tig4, const int64_t tig8 );
-    void reconstruct( Mat &w );// For illustration purpose
-
-  private:
-    static const int NUM_COMP = 2;// Number of components
-    static const int D = 64;// Dimension of TIG
-    int64_t _bTIGs[NUM_COMP];// Binary TIG features
-    float _coeffs1[NUM_COMP];// Coefficients of binary TIG features
-
-    // For efficiently deals with different bits in CV_8U gradient map
-    float _coeffs2[NUM_COMP], _coeffs4[NUM_COMP], _coeffs8[NUM_COMP];
-  };
-
-  template<typename VT, typename ST>
-  struct ValStructVec
-  {
-    ValStructVec();
-    int size() const;
-    void clear();
-    void reserve( int resSz );
-    void pushBack( const VT& val, const ST& structVal );
-    const VT& operator ()( int i ) const;
-    const ST& operator []( int i ) const;
-    VT& operator ()( int i );
-    ST& operator []( int i );
-
-    void sort( bool descendOrder = true );
-    const std::vector<ST> &getSortedStructVal();
-    std::vector<std::pair<VT, int> > getvalIdxes();
-    void append( const ValStructVec<VT, ST> &newVals, int startV = 0 );
-
-    std::vector<ST> structVals;  // struct values
-    int sz;// size of the value struct vector
-    std::vector<std::pair<VT, int> > valIdxes;// Indexes after sort
-    bool smaller()
-    {
-      return true;
-    }
-    std::vector<ST> sortedStructVals;
-  };
-
-  enum
-  {
-    MAXBGR,
-    HSV,
-    G
-  };
-
-  double _base, _logBase;  // base for window size quantization
-  int _W;// As described in the paper: #Size, Size(_W, _H) of feature window.
-  int _NSS;// Size for non-maximal suppress
-  int _maxT, _minT, _numT;// The minimal and maximal dimensions of the template
-
-  int _Clr;//
-  static const char* _clrName[3];
-
-  // Names and paths to read model and to store results
-  std::string _modelName, _bbResDir, _trainingPath, _resultsDir;
-
-  std::vector<int> _svmSzIdxs;// Indexes of active size. It's equal to _svmFilters.size() and _svmReW1f.rows
-  Mat _svmFilter;// Filters learned at stage I, each is a _H by _W CV_32F matrix
-  FilterTIG _tigF;// TIG filter
-  Mat _svmReW1f;// Re-weight parameters learned at stage II.
-
-  // List of the rectangles' objectness value, in the same order as
-  // the  vector<Vec4i> objectnessBoundingBox returned by the algorithm (in computeSaliencyImpl function)
-  std::vector<float> objectnessValues;
+  float dot( const int64_t tig1, const int64_t tig2, const int64_t tig4, const int64_t tig8 );
+  void reconstruct( Mat &w );// For illustration purpose
 
 private:
-  // functions
+  static const int NUM_COMP = 2;// Number of components
+  static const int D = 64;// Dimension of TIG
+  int64_t _bTIGs[NUM_COMP];// Binary TIG features
+  float _coeffs1[NUM_COMP];// Coefficients of binary TIG features
 
-  inline static float LoG( float x, float y, float delta )
+  // For efficiently deals with different bits in CV_8U gradient map
+  float _coeffs2[NUM_COMP], _coeffs4[NUM_COMP], _coeffs8[NUM_COMP];
+};
+
+template<typename VT, typename ST>
+struct ValStructVec
+{
+  ValStructVec();
+  int size() const;
+  void clear();
+  void reserve( int resSz );
+  void pushBack( const VT& val, const ST& structVal );
+  const VT& operator ()( int i ) const;
+  const ST& operator []( int i ) const;
+  VT& operator ()( int i );
+  ST& operator []( int i );
+
+  void sort( bool descendOrder = true );
+  const std::vector<ST> &getSortedStructVal();
+  std::vector<std::pair<VT, int> > getvalIdxes();
+  void append( const ValStructVec<VT, ST> &newVals, int startV = 0 );
+
+  std::vector<ST> structVals;  // struct values
+  int sz;// size of the value struct vector
+  std::vector<std::pair<VT, int> > valIdxes;// Indexes after sort
+  bool smaller()
   {
-    float d = - ( x * x + y * y ) / ( 2 * delta * delta );
-    return -1.0f / ( (float) ( CV_PI ) * pow( delta, 4 ) ) * ( 1 + d ) * exp( d );
-  }  // Laplacian of Gaussian
-
-  // Read matrix from binary file
-  static bool matRead( const std::string& filename, Mat& M );
-
-  void setColorSpace( int clr = MAXBGR );
-
-  // Load trained model.
-  int loadTrainedModel( std::string modelName = "" );// Return -1, 0, or 1 if partial, none, or all loaded
-
-  // Get potential bounding boxes, each of which is represented by a Vec4i for (minX, minY, maxX, maxY).
-  // The trained model should be prepared before calling this function: loadTrainedModel() or trainStageI() + trainStageII().
-  // Use numDet to control the final number of proposed bounding boxes, and number of per size (scale and aspect ratio)
-  void getObjBndBoxes( Mat &img3u, ValStructVec<float, Vec4i> &valBoxes, int numDetPerSize = 120 );
-  void getObjBndBoxesForSingleImage( Mat img, ValStructVec<float, Vec4i> &boxes, int numDetPerSize );
-
-  bool filtersLoaded()
-  {
-    int n = (int) _svmSzIdxs.size();
-    return n > 0 && _svmReW1f.size() == Size( 2, n ) && _svmFilter.size() == Size( _W, _W );
+    return true;
   }
-  void predictBBoxSI( Mat &mag3u, ValStructVec<float, Vec4i> &valBoxes, std::vector<int> &sz, int NUM_WIN_PSZ = 100, bool fast = true );
-  void predictBBoxSII( ValStructVec<float, Vec4i> &valBoxes, const std::vector<int> &sz );
+  std::vector<ST> sortedStructVals;
+};
 
-  // Calculate the image gradient: center option as in VLFeat
-  void gradientMag( Mat &imgBGR3u, Mat &mag1u );
+enum
+{
+  MAXBGR,
+  HSV,
+  G
+};
 
-  static void gradientRGB( Mat &bgr3u, Mat &mag1u );
-  static void gradientGray( Mat &bgr3u, Mat &mag1u );
-  static void gradientHSV( Mat &bgr3u, Mat &mag1u );
-  static void gradientXY( Mat &x1i, Mat &y1i, Mat &mag1u );
+double _base, _logBase;  // base for window size quantization
+int _W;// As described in the paper: #Size, Size(_W, _H) of feature window.
+int _NSS;// Size for non-maximal suppress
+int _maxT, _minT, _numT;// The minimal and maximal dimensions of the template
 
-  static inline int bgrMaxDist( const Vec3b &u, const Vec3b &v )
-  {
-    int b = abs( u[0] - v[0] ), g = abs( u[1] - v[1] ), r = abs( u[2] - v[2] );
-    b = max( b, g );
-    return max( b, r );
-  }
-  static inline int vecDist3b( const Vec3b &u, const Vec3b &v )
-  {
-    return abs( u[0] - v[0] ) + abs( u[1] - v[1] ) + abs( u[2] - v[2] );
-  }
+int _Clr;//
+static const char* _clrName[3];
 
-  //Non-maximal suppress
-  static void nonMaxSup( Mat &matchCost1f, ValStructVec<float, Point> &matchCost, int NSS = 1, int maxPoint = 50, bool fast = true );
+// Names and paths to read model and to store results
+std::string _modelName, _bbResDir, _trainingPath, _resultsDir;
+
+std::vector<int> _svmSzIdxs;// Indexes of active size. It's equal to _svmFilters.size() and _svmReW1f.rows
+Mat _svmFilter;// Filters learned at stage I, each is a _H by _W CV_32F matrix
+FilterTIG _tigF;// TIG filter
+Mat _svmReW1f;// Re-weight parameters learned at stage II.
+
+// List of the rectangles' objectness value, in the same order as
+// the  vector<Vec4i> objectnessBoundingBox returned by the algorithm (in computeSaliencyImpl function)
+std::vector<float> objectnessValues;
+
+private:
+// functions
+
+inline static float LoG( float x, float y, float delta )
+{
+  float d = - ( x * x + y * y ) / ( 2 * delta * delta );
+  return -1.0f / ( (float) ( CV_PI ) * pow( delta, 4 ) ) * ( 1 + d ) * exp( d );
+}  // Laplacian of Gaussian
+
+// Read matrix from binary file
+static bool matRead( const std::string& filename, Mat& M );
+
+void setColorSpace( int clr = MAXBGR );
+
+// Load trained model.
+int loadTrainedModel( std::string modelName = "" );// Return -1, 0, or 1 if partial, none, or all loaded
+
+// Get potential bounding boxes, each of which is represented by a Vec4i for (minX, minY, maxX, maxY).
+// The trained model should be prepared before calling this function: loadTrainedModel() or trainStageI() + trainStageII().
+// Use numDet to control the final number of proposed bounding boxes, and number of per size (scale and aspect ratio)
+void getObjBndBoxes( Mat &img3u, ValStructVec<float, Vec4i> &valBoxes, int numDetPerSize = 120 );
+void getObjBndBoxesForSingleImage( Mat img, ValStructVec<float, Vec4i> &boxes, int numDetPerSize );
+
+bool filtersLoaded()
+{
+  int n = (int) _svmSzIdxs.size();
+  return n > 0 && _svmReW1f.size() == Size( 2, n ) && _svmFilter.size() == Size( _W, _W );
+}
+void predictBBoxSI( Mat &mag3u, ValStructVec<float, Vec4i> &valBoxes, std::vector<int> &sz, int NUM_WIN_PSZ = 100, bool fast = true );
+void predictBBoxSII( ValStructVec<float, Vec4i> &valBoxes, const std::vector<int> &sz );
+
+// Calculate the image gradient: center option as in VLFeat
+void gradientMag( Mat &imgBGR3u, Mat &mag1u );
+
+static void gradientRGB( Mat &bgr3u, Mat &mag1u );
+static void gradientGray( Mat &bgr3u, Mat &mag1u );
+static void gradientHSV( Mat &bgr3u, Mat &mag1u );
+static void gradientXY( Mat &x1i, Mat &y1i, Mat &mag1u );
+
+static inline int bgrMaxDist( const Vec3b &u, const Vec3b &v )
+{
+  int b = abs( u[0] - v[0] ), g = abs( u[1] - v[1] ), r = abs( u[2] - v[2] );
+  b = max( b, g );
+  return max( b, r );
+}
+static inline int vecDist3b( const Vec3b &u, const Vec3b &v )
+{
+  return abs( u[0] - v[0] ) + abs( u[1] - v[1] ) + abs( u[2] - v[2] );
+}
+
+//Non-maximal suppress
+static void nonMaxSup( Mat &matchCost1f, ValStructVec<float, Point> &matchCost, int NSS = 1, int maxPoint = 50, bool fast = true );
 
 };
 

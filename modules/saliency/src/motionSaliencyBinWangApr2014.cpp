@@ -70,6 +70,16 @@ MotionSaliencyBinWangApr2014::MotionSaliencyBinWangApr2014()
   gamma = 3;
   neighborhoodCheck = true;
 
+  Ainc=6;  // Activity Incrementation;
+  Bmax=80;  // Upper-bound value for pixel activity
+  Bth=70;  // Max activity threshold
+  Binc=50;
+  Bdec=20;  // Threshold for pixel-level decision threshold (epslon) adaptation
+  deltaINC=20;
+  deltaDEC=0.125;  // Increment-decrement value for epslon adaptation
+  epslonMIN=18;
+  epslonMAX=80;
+
   className = "BinWangApr2014";
 }
 
@@ -93,6 +103,8 @@ bool MotionSaliencyBinWangApr2014::init()
     Ptr<Mat> tmp = Ptr<Mat>( tmpm );
     backgroundModel[i] = tmp;
   }
+
+  noisePixelMask=Mat( imgSize.height, imgSize.width, CV_8UC2, Scalar( 0, 0 ) );
 
   return true;
 
@@ -510,7 +522,6 @@ bool MotionSaliencyBinWangApr2014::computeSaliencyImpl( const InputArray image, 
 
   fullResolutionDetection( image.getMat(), highResBFMask );
   lowResolutionDetection( image.getMat(), lowResBFMask );
-
 
 // Compute the final background-foreground mask. One pixel is marked as foreground if and only if it is
 // foreground in both masks (full and low)
