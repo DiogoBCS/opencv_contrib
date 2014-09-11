@@ -70,15 +70,15 @@ MotionSaliencyBinWangApr2014::MotionSaliencyBinWangApr2014()
   gamma = 3;
   neighborhoodCheck = true;
 
-  Ainc=6;  // Activity Incrementation;
-  Bmax=80;  // Upper-bound value for pixel activity
-  Bth=70;  // Max activity threshold
-  Binc=50;
-  Bdec=20;  // Threshold for pixel-level decision threshold (epslon) adaptation
-  deltaINC=20;
-  deltaDEC=0.125;  // Increment-decrement value for epslon adaptation
-  epslonMIN=18;
-  epslonMAX=80;
+  Ainc = 6;  // Activity Incrementation;
+  Bmax = 80;  // Upper-bound value for pixel activity
+  Bth = 70;  // Max activity threshold
+  Binc = 50;
+  Bdec = 20;  // Threshold for pixel-level decision threshold (epslon) adaptation
+  deltaINC = 20;
+  deltaDEC = 0.125;  // Increment-decrement value for epslon adaptation
+  epslonMIN = 18;
+  epslonMAX = 80;
 
   className = "BinWangApr2014";
 }
@@ -104,7 +104,9 @@ bool MotionSaliencyBinWangApr2014::init()
     backgroundModel[i] = tmp;
   }
 
-  noisePixelMask=Mat( imgSize.height, imgSize.width, CV_8UC2, Scalar( 0, 0 ) );
+  //noisePixelMask = Mat( imgSize.height, imgSize.width, CV_8UC2, Scalar( 0, 0 ) );
+  noisePixelMask = Mat( imgSize.height, imgSize.width, CV_8UC1, 0 );
+  activityPixelsValue = Mat( imgSize.height, imgSize.width, CV_8UC1, 0 );
 
   return true;
 
@@ -141,58 +143,68 @@ bool MotionSaliencyBinWangApr2014::fullResolutionDetection( const Mat& image2, M
     pMask = highResBFMask.ptr<float>( i );
     for ( int j = 0; j < image.cols; j++ )
     {
-
-      backgFlag = false;
-      currentPixelValue = pImage[j];
-      currentEpslonValue = pEpslon[j];
-
-      int counter = 0;
-      for ( size_t z = 0; z < backgroundModel.size(); z++ )
+      /*    Pixels with activity greater than Bth are eliminated from the detection result. In this way,
+       continuously blinking noise-pixels will be eliminated from the detection results,
+       preventing the generation of false positives.*/
+      if( activityPixelsValue.at<int>( i, j ) < Bth )
       {
 
-        counter += (int) backgroundModel[z]->ptr<Vec2f>( i )[j][1];
-      }
+        backgFlag = false;
+        currentPixelValue = pImage[j];
+        currentEpslonValue = pEpslon[j];
 
-      if( counter != 0 )  //if at least the first template is activated / initialized
-      {
-
-        // scan background model vector
+        int counter = 0;
         for ( size_t z = 0; z < backgroundModel.size(); z++ )
         {
-          float* currentB;
-          float* currentC;
-          currentB = & ( backgroundModel[z]->ptr<Vec2f>( i )[j][0] );
-          currentC = & ( backgroundModel[z]->ptr<Vec2f>( i )[j][1] );
 
-          //continue;
-          if( ( *currentC ) > 0 )  //The current template is active
+          counter += (int) backgroundModel[z]->ptr<Vec2f>( i )[j][1];
+        }
+
+        if( counter != 0 )  //if at least the first template is activated / initialized
+        {
+
+          // scan background model vector
+          for ( size_t z = 0; z < backgroundModel.size(); z++ )
           {
-            // If there is a match with a current background template
-            if( abs( currentPixelValue - ( *currentB ) ) < currentEpslonValue && !backgFlag )
+            float* currentB;
+            float* currentC;
+            currentB = & ( backgroundModel[z]->ptr<Vec2f>( i )[j][0] );
+            currentC = & ( backgroundModel[z]->ptr<Vec2f>( i )[j][1] );
+
+            //continue;
+            if( ( *currentC ) > 0 )  //The current template is active
             {
-              // The correspondence pixel in the  BF mask is set as background ( 0 value)
-              pMask[j] = 0;
-              if( ( *currentC < L0 && z == 0 ) || ( *currentC < L1 && z == 1 ) || ( z > 1 ) )
+              // If there is a match with a current background template
+              if( abs( currentPixelValue - ( *currentB ) ) < currentEpslonValue && !backgFlag )
               {
-                *currentC += 1;  // increment the efficacy of this template
+                // The correspondence pixel in the  BF mask is set as background ( 0 value)
+                pMask[j] = 0;
+                if( ( *currentC < L0 && z == 0 ) || ( *currentC < L1 && z == 1 ) || ( z > 1 ) )
+                {
+                  *currentC += 1;  // increment the efficacy of this template
+                }
+
+                *currentB = ( ( 1 - alpha ) * ( *currentB ) ) + ( alpha * currentPixelValue );  // Update the template value
+                backgFlag = true;
+              }
+              else
+              {
+                *currentC -= 1;  // decrement the efficacy of this template
               }
 
-              *currentB = ( ( 1 - alpha ) * ( *currentB ) ) + ( alpha * currentPixelValue );  // Update the template value
-              backgFlag = true;
-            }
-            else
-            {
-              *currentC -= 1;  // decrement the efficacy of this template
             }
 
-          }
+          }  // end "for" cicle of template vector
 
-        }  // end "for" cicle of template vector
-
+        }
+        else
+        {
+          pMask[j] = 1;  //if the model of the current pixel is not yet initialized, we mark the pixels as foreground
+        }
       }
       else
       {
-        pMask[j] = 1;  //if the model of the current pixel is not yet initialized, we mark the pixels as foreground
+        pMask[j] = 0;
       }
 
     }
@@ -236,41 +248,50 @@ bool MotionSaliencyBinWangApr2014::lowResolutionDetection( const Mat& image, Mat
 
       for ( int j = 0; j < ceil( (float) image.cols / N ); j++ )
       {
-        // Compute the mean of image's block and epslonMatrix's block based on ROI
-        Mat roiImage = image( roi );
-        Mat roiEpslon = epslonPixelsValue( roi );
-        currentPixelValue = (float) mean( roiImage ).val[0];
-        currentEpslonValue = (float) mean( roiEpslon ).val[0];
-
-        // scan background model vector
-        for ( int z = 0; z < N_DS; z++ )
+        if( activityPixelsValue.at<int>( i, j ) < Bth )
         {
-          // Select the current template 2 channel matrix, select ROI and compute the mean for each channel separately
-          Mat roiTemplate = ( * ( backgroundModel[z] ) )( roi );
-          Scalar templateMean = mean( roiTemplate );
-          currentB = (float) templateMean[0];
-          currentC = (float) templateMean[1];
 
-          if( ( currentC ) > 0 )  //The current template is active
+          // Compute the mean of image's block and epslonMatrix's block based on ROI
+          Mat roiImage = image( roi );
+          Mat roiEpslon = epslonPixelsValue( roi );
+          currentPixelValue = (float) mean( roiImage ).val[0];
+          currentEpslonValue = (float) mean( roiEpslon ).val[0];
+
+          // scan background model vector
+          for ( int z = 0; z < N_DS; z++ )
           {
-            // If there is a match with a current background template
-            if( abs( currentPixelValue - ( currentB ) ) < currentEpslonValue )
+            // Select the current template 2 channel matrix, select ROI and compute the mean for each channel separately
+            Mat roiTemplate = ( * ( backgroundModel[z] ) )( roi );
+            Scalar templateMean = mean( roiTemplate );
+            currentB = (float) templateMean[0];
+            currentC = (float) templateMean[1];
+
+            if( ( currentC ) > 0 )  //The current template is active
             {
-              // The correspondence pixel in the  BF mask is set as background ( 0 value)
-              rectangle( lowResBFMask, roi, Scalar( 0 ), FILLED );
-              break;
+              // If there is a match with a current background template
+              if( abs( currentPixelValue - ( currentB ) ) < currentEpslonValue )
+              {
+                // The correspondence pixel in the  BF mask is set as background ( 0 value)
+                rectangle( lowResBFMask, roi, Scalar( 0 ), FILLED );
+                break;
+              }
             }
           }
+          // Shift the ROI from left to right follow the block dimension
+          roi = roi + Point( N, 0 );
+          if( ( roi.x + ( roi.width - 1 ) ) > ( image.cols - 1 ) && ( roi.y + ( N - 1 ) ) <= ( image.rows - 1 ) )
+          {
+            roi = Rect( Point( roi.x, roi.y ), Size( abs( ( image.cols - 1 ) - roi.x ) + 1, N ) );
+          }
+          else if( ( roi.x + ( roi.width - 1 ) ) > ( image.cols - 1 ) && ( roi.y + ( N - 1 ) ) > ( image.rows - 1 ) )
+          {
+            roi = Rect( Point( roi.x, roi.y ), Size( abs( ( image.cols - 1 ) - roi.x ) + 1, abs( ( image.rows - 1 ) - roi.y ) + 1 ) );
+          }
         }
-        // Shift the ROI from left to right follow the block dimension
-        roi = roi + Point( N, 0 );
-        if( ( roi.x + ( roi.width - 1 ) ) > ( image.cols - 1 ) && ( roi.y + ( N - 1 ) ) <= ( image.rows - 1 ) )
+        else
         {
-          roi = Rect( Point( roi.x, roi.y ), Size( abs( ( image.cols - 1 ) - roi.x ) + 1, N ) );
-        }
-        else if( ( roi.x + ( roi.width - 1 ) ) > ( image.cols - 1 ) && ( roi.y + ( N - 1 ) ) > ( image.rows - 1 ) )
-        {
-          roi = Rect( Point( roi.x, roi.y ), Size( abs( ( image.cols - 1 ) - roi.x ) + 1, abs( ( image.rows - 1 ) - roi.y ) + 1 ) );
+          // The correspondence pixel in the  BF mask is set as background ( 0 value)
+          rectangle( lowResBFMask, roi, Scalar( 0 ), FILLED );
         }
       }
       //Shift the ROI from up to down follow the block dimension, also bringing it back to beginning of row
@@ -513,12 +534,69 @@ bool MotionSaliencyBinWangApr2014::templateReplacement( const Mat& finalBFMask, 
   return true;
 }
 
+bool MotionSaliencyBinWangApr2014::activityControl( const Mat current_noisePixelsMask )
+{
+  Mat discordanceFramesNoise, not_current_noisePixelsMask;
+  Mat nonZeroIndexes, not_discordanceFramesNoise;
+
+  // Derive the discrepancy between noise in the frame n-1 and frame n
+  bitwise_not( current_noisePixelsMask, not_current_noisePixelsMask );
+  bitwise_and( noisePixelMask, not_current_noisePixelsMask, discordanceFramesNoise );
+
+  // indices in which the pixel at frame n-1 was the noise (or not) and now no (or yes) (blinking pixels)
+  findNonZero( discordanceFramesNoise, nonZeroIndexes );
+
+  // we increase the activity value of these pixels
+  for ( int i = 0; i < nonZeroIndexes.cols; i++ )
+  {
+    if( activityPixelsValue.at<int>( nonZeroIndexes.at<int>( i ) ) < Bmax )
+    {
+      activityPixelsValue.at<int>( nonZeroIndexes.at<int>( i ) ) += Ainc;
+    }
+  }
+
+  // decrementiamo gli altri pixel che non hanno subito variazioni (non blinking)
+  bitwise_not( discordanceFramesNoise, not_discordanceFramesNoise );
+  findNonZero( not_discordanceFramesNoise, nonZeroIndexes );
+  for ( int j = 0; j < nonZeroIndexes.cols; j++ )
+  {
+    activityPixelsValue.at<int>( nonZeroIndexes.at<int>( j ) ) -= 1;
+  }
+
+  //update the noisePixelsMask
+  noisePixelMask = current_noisePixelsMask;
+
+  return true;
+}
+
+bool MotionSaliencyBinWangApr2014::decisionThresholdAdaptation()
+{
+
+  for ( int i = 0; i < activityPixelsValue.rows; i++ )
+  {
+    for ( int j = 0; j < activityPixelsValue.cols; j++ )
+    {
+      if( activityPixelsValue.at<int>( i, j ) > Binc && activityPixelsValue.at<int>( i, j ) < epslonMAX )
+      {
+
+        epslonPixelsValue.at<int>( i, j ) += deltaINC;
+      }
+      else if( activityPixelsValue.at<int>( i, j ) < Bdec && activityPixelsValue.at<int>( i, j ) > epslonMIN )
+      {
+        epslonPixelsValue.at<int>( i, j ) -= deltaDEC;
+      }
+    }
+  }
+
+  return true;
+}
+
 bool MotionSaliencyBinWangApr2014::computeSaliencyImpl( const InputArray image, OutputArray saliencyMap )
 {
   Mat highResBFMask;
   Mat lowResBFMask;
   Mat not_lowResBFMask;
-  Mat noisePixelsMask;
+  Mat current_noisePixelsMask;
 
   fullResolutionDetection( image.getMat(), highResBFMask );
   lowResolutionDetection( image.getMat(), lowResBFMask );
@@ -526,6 +604,13 @@ bool MotionSaliencyBinWangApr2014::computeSaliencyImpl( const InputArray image, 
 // Compute the final background-foreground mask. One pixel is marked as foreground if and only if it is
 // foreground in both masks (full and low)
   bitwise_and( highResBFMask, lowResBFMask, saliencyMap );
+
+// Detect the noise pixels (i.e. for a given pixel, fullRes(pixel) = foreground and lowRes(pixel)= background)
+  bitwise_not( lowResBFMask, not_lowResBFMask );
+  bitwise_and( highResBFMask, not_lowResBFMask, current_noisePixelsMask );
+
+  activityControl( current_noisePixelsMask );
+  decisionThresholdAdaptation();
 
   templateOrdering();
   templateReplacement( saliencyMap.getMat(), image.getMat() );
