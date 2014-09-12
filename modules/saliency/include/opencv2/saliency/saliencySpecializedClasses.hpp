@@ -111,7 +111,7 @@ private:
   bool templateReplacement( const Mat& finalBFMask, const Mat& image );
 
   // Decision threshold adaptation and Activity control function
-  bool activityControl(const Mat current_noisePixelsMask);
+  bool activityControl(const Mat& current_noisePixelsMask);
   bool decisionThresholdAdaptation();
 
   // changing structure
