@@ -45,6 +45,7 @@
 
 #define thetaA_VAL 200
 #define thetaL_VAL 250
+#define epsolGeneric 20
 
 namespace cv
 {
@@ -72,9 +73,9 @@ MotionSaliencyBinWangApr2014::MotionSaliencyBinWangApr2014()
 
   Ainc = 6;  // Activity Incrementation;
   Bmax = 80;  // Upper-bound value for pixel activity
-  Bth = 70;  // Max activity threshold
-  Binc = 50;
-  Bdec = 20;  // Threshold for pixel-level decision threshold (epslon) adaptation
+  Bth = 20;  //70;  // Max activity threshold
+  Binc = 15;  //50;
+  Bdec = 5;  //20;  // Threshold for pixel-level decision threshold (epslon) adaptation
   deltaINC = 20;
   deltaDEC = 0.125;  // Increment-decrement value for epslon adaptation
   epslonMIN = 18;
@@ -85,12 +86,9 @@ MotionSaliencyBinWangApr2014::MotionSaliencyBinWangApr2014()
 
 bool MotionSaliencyBinWangApr2014::init()
 {
+  activityControlFlag = false;
   Size imgSize( imageWidth, imageHeight );
-  epslonPixelsValue = Mat( imgSize.height, imgSize.width, CV_32F, Scalar( 20 ) );
-  // Median of range [18, 80] advised in reference paper.
-  // Since data is even, the median is estimated using two values ​​that occupy
-  // the position (n / 2) and ((n / 2) +1) (choose their arithmetic mean).
-
+  epslonPixelsValue = Mat( imgSize.height, imgSize.width, CV_32F, Scalar( epsolGeneric ) );
   potentialBackground = Mat( imgSize.height, imgSize.width, CV_32FC2, Scalar( NAN, 0 ) );
 
   backgroundModel.resize( K + 1 );
@@ -104,12 +102,10 @@ bool MotionSaliencyBinWangApr2014::init()
     backgroundModel[i] = tmp;
   }
 
-  //noisePixelMask = Mat( imgSize.height, imgSize.width, CV_8UC2, Scalar( 0, 0 ) );
-  //noisePixelMask = Mat( imgSize.height, imgSize.width, CV_32F, 0 );
   noisePixelMask.create( imgSize.height, imgSize.width, CV_8UC1 );
-  noisePixelMask.setTo( 0 );
+  noisePixelMask.setTo( Scalar( 0 ) );
   activityPixelsValue.create( imgSize.height, imgSize.width, CV_8UC1 );
-  activityPixelsValue.setTo( 0 );
+  activityPixelsValue.setTo( Scalar( 0 ) );
 
   return true;
 
@@ -151,7 +147,6 @@ bool MotionSaliencyBinWangApr2014::fullResolutionDetection( const Mat& image2, M
        preventing the generation of false positives.*/
       if( activityPixelsValue.at<uchar>( i, j ) < Bth )
       {
-
         backgFlag = false;
         currentPixelValue = pImage[j];
         currentEpslonValue = pEpslon[j];
@@ -389,6 +384,8 @@ bool MotionSaliencyBinWangApr2014::templateReplacement( const Mat& finalBFMask, 
   {
     thetaA = 50;
     thetaL = 150;
+    /*    thetaA = 5;
+     thetaL = 15;*/
     neighborhoodCheck = false;
 
   }
@@ -547,18 +544,16 @@ bool MotionSaliencyBinWangApr2014::activityControl( const Mat& current_noisePixe
 
   current_noisePixelsMask.convertTo( u_current_noisePixelsMask, CV_8UC1 );
 
-  //discordanceFramesNoise.create( current_noisePixelsMask.rows, current_noisePixelsMask.cols, CV_8UC1 );
-  //not_current_noisePixelsMask.create( current_noisePixelsMask.rows, current_noisePixelsMask.cols, CV_8U );
-
-  // Derive the discrepancy between noise in the frame n-1 and frame n
-  bitwise_not( u_current_noisePixelsMask, not_current_noisePixelsMask );
+// Derive the discrepancy between noise in the frame n-1 and frame n
+  threshold( u_current_noisePixelsMask, not_current_noisePixelsMask, 0.5, 1.0, THRESH_BINARY_INV );
   bitwise_and( noisePixelMask, not_current_noisePixelsMask, discordanceFramesNoise );
 
-  // indices in which the pixel at frame n-1 was the noise (or not) and now no (or yes) (blinking pixels)
+// indices in which the pixel at frame n-1 was the noise (or not) and now no (or yes) (blinking pixels)
   findNonZero( discordanceFramesNoise, nonZeroIndexes );
 
   Vec2i temp;
-  // we increase the activity value of these pixels
+
+// we increase the activity value of these pixels
   for ( int i = 0; i < nonZeroIndexes.rows; i++ )
   {
     //TODO check rows, cols inside at
@@ -569,17 +564,21 @@ bool MotionSaliencyBinWangApr2014::activityControl( const Mat& current_noisePixe
     }
   }
 
-  // decrement other pixels that have not changed (not blinking)
-  bitwise_not( discordanceFramesNoise, not_discordanceFramesNoise );
+// decrement other pixels that have not changed (not blinking)
+  threshold( discordanceFramesNoise, not_discordanceFramesNoise, 0.5, 1.0, THRESH_BINARY_INV );
   findNonZero( not_discordanceFramesNoise, nonZeroIndexes );
+
   Vec2i temp2;
+
   for ( int j = 0; j < nonZeroIndexes.rows; j++ )
   {
     temp2 = nonZeroIndexes.at<Vec2i>( j );
-    activityPixelsValue.at<uchar>( temp2.val[1], temp2.val[0] ) -= 1;
+    if( activityPixelsValue.at<uchar>( temp2.val[1], temp2.val[0] ) > 0 )
+    {
+      activityPixelsValue.at<uchar>( temp2.val[1], temp2.val[0] ) -= 1;
+    }
   }
-
-  // update the noisePixelsMask
+// update the noisePixelsMask
   u_current_noisePixelsMask.copyTo( noisePixelMask );
 
   return true;
@@ -592,14 +591,14 @@ bool MotionSaliencyBinWangApr2014::decisionThresholdAdaptation()
   {
     for ( int j = 0; j < activityPixelsValue.cols; j++ )
     {
-      if( activityPixelsValue.at<uchar>( i, j ) > Binc && activityPixelsValue.at<uchar>( i, j ) < epslonMAX )
+      if( activityPixelsValue.at<uchar>( i, j ) > Binc && ( epslonPixelsValue.at<float>( i, j ) + deltaINC ) < epslonMAX )
       {
 
-        epslonPixelsValue.at<uchar>( i, j ) += deltaINC;
+        epslonPixelsValue.at<float>( i, j ) += deltaINC;
       }
-      else if( activityPixelsValue.at<uchar>( i, j ) < Bdec && activityPixelsValue.at<uchar>( i, j ) > epslonMIN )
+      else if( activityPixelsValue.at<uchar>( i, j ) < Bdec && ( epslonPixelsValue.at<float>( i, j ) - deltaDEC ) > epslonMIN )
       {
-        epslonPixelsValue.at<uchar>( i, j ) -= deltaDEC;
+        epslonPixelsValue.at<float>( i, j ) -= deltaDEC;
       }
     }
   }
@@ -609,11 +608,10 @@ bool MotionSaliencyBinWangApr2014::decisionThresholdAdaptation()
 
 bool MotionSaliencyBinWangApr2014::computeSaliencyImpl( const InputArray image, OutputArray saliencyMap )
 {
-  Mat highResBFMask;
-  Mat lowResBFMask;
+  Mat highResBFMask, u_highResBFMask;
+  Mat lowResBFMask, u_lowResBFMask;
   Mat not_lowResBFMask;
   Mat current_noisePixelsMask;
-  //current_noisePixelsMask.create( image.getMat().rows, image.getMat().cols, CV_32FC1 );
 
   fullResolutionDetection( image.getMat(), highResBFMask );
   lowResolutionDetection( image.getMat(), lowResBFMask );
@@ -622,16 +620,21 @@ bool MotionSaliencyBinWangApr2014::computeSaliencyImpl( const InputArray image, 
 // foreground in both masks (full and low)
   bitwise_and( highResBFMask, lowResBFMask, saliencyMap );
 
-// Detect the noise pixels (i.e. for a given pixel, fullRes(pixel) = foreground and lowRes(pixel)= background)
-  bitwise_not( lowResBFMask, not_lowResBFMask );
-  bitwise_and( highResBFMask, not_lowResBFMask, current_noisePixelsMask );
+  if( activityControlFlag )
+  {
 
-  activityControl( current_noisePixelsMask );
-  decisionThresholdAdaptation();
+// Detect the noise pixels (i.e. for a given pixel, fullRes(pixel) = foreground and lowRes(pixel)= background)
+    threshold( lowResBFMask, not_lowResBFMask, 0.5, 1.0, THRESH_BINARY_INV );
+    bitwise_and( highResBFMask, not_lowResBFMask, current_noisePixelsMask );
+
+    activityControl( current_noisePixelsMask );
+    decisionThresholdAdaptation();
+  }
 
   templateOrdering();
   templateReplacement( saliencyMap.getMat(), image.getMat() );
   templateOrdering();
+  activityControlFlag = true;
 
   return true;
 }

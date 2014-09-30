@@ -42,7 +42,6 @@
 #ifndef __OPENCV_SALIENCY_SPECIALIZED_CLASSES_HPP__
 #define __OPENCV_SALIENCY_SPECIALIZED_CLASSES_HPP__
 
-//#include "opencv2/saliency/kyheader.hpp"
 #include <cstdio>
 #include <string>
 #include <iostream>
@@ -131,6 +130,7 @@ private:
   // for each pixel. In the second layer, there is the value of activity level A for each pixel.
 
   //fixed parameter
+  bool activityControlFlag;
   bool neighborhoodCheck;
   int N_DS;// Number of template to be downsampled and used in lowResolutionDetection function
   int imageWidth;// Width of input image
@@ -149,7 +149,7 @@ private:
   int Bmax;// Upper-bound value for pixel activity
   int Bth;// Max activity threshold
   int Binc, Bdec;// Threshold for pixel-level decision threshold (epslon) adaptation
-  int deltaINC, deltaDEC;// Increment-decrement value for epslon adaptation
+  float deltaINC, deltaDEC;// Increment-decrement value for epslon adaptation
   int epslonMIN, epslonMAX;// Range values for epslon threshold
 
 };
