@@ -51,37 +51,3 @@ using std::tr1::make_tuple;
 using std::tr1::get;
 
 typedef perf::TestBaseWithParam<std::string> sal;
-
-#define STATIC_IMAGES \
-    "cv/saliency/static_saliency/8.jpg",\
-    "cv/saliency/static_saliency/39.jpg" ,\
-    "cv/saliency/static_saliency/41.jpg" ,\
-    "cv/saliency/static_saliency/62.jpg"
-
-PERF_TEST_P(sal, statiSaliencySpectralResidual, testing::Values(STATIC_IMAGES))
-{
-  string filename = getDataPath(GetParam());
-  Mat image = imread(filename);
-  Mat saliencyMap;
-
-  if (image.empty())
-  FAIL() << "Unable to load source image " << filename;
-
-  Ptr<saliency::Saliency> saliencyAlgorithm = saliency::Saliency::create( "SPECTRAL_RESIDUAL" );
-
-  TEST_CYCLE_N(1)
-  {
-
-    if( saliencyAlgorithm->computeSaliency( image, saliencyMap ) )
-    {
-
-    }
-    else
-    {
-      FAIL()<< "***Error in the instantiation of the saliency algorithm...***\n" << endl;
-      return;
-    }
-  } //end CYCLE
-
-  SANITY_CHECK(saliencyMap);
-}

@@ -9,7 +9,7 @@
 #ifndef __OPENCV_SALIENCY_PRECOMP_HPP__
 #define __OPENCV_SALIENCY_PRECOMP_HPP__
 
-
+#include <opencv2/ts.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/saliency.hpp>
 #include <opencv2/highgui.hpp>

@@ -50,10 +50,11 @@ using namespace perf;
 using std::tr1::make_tuple;
 using std::tr1::get;
 
-typedef perf::TestBaseWithParam<std::string> saliency;
+typedef perf::TestBaseWithParam<std::string> sal;
 
 #define BING_IMAGES \
-    "/home/puja/src/BING_beta2_linux/VOC2007/JPEGImages/000021.jpg"
+    "cv/saliency/objectness/000021.jpg", \
+"cv/saliency/objectness/000022.jpg"
 
 void getMatOfRects( const vector<Vec4i>& saliencyMap, Mat& bbs_mat )
 {
@@ -66,31 +67,30 @@ void getMatOfRects( const vector<Vec4i>& saliencyMap, Mat& bbs_mat )
   }
 }
 
-PERF_TEST_P(saliency, statiSaliencySpectralResidual, testing::Values(BING_IMAGES))
+PERF_TEST_P(sal, objectnessBING, testing::Values(BING_IMAGES))
 {
   string filename = getDataPath(GetParam());
   Mat image = imread(filename);
+  vector<Vec4i> saliencyMap;
   String training_path = "/home/puja/src/opencv_contrib/modules/saliency/samples/ObjectnessTrainedModel";
 
   if (image.empty())
   FAIL() << "Unable to load source image " << filename;
 
-  Ptr<Saliency> saliencyAlgorithm = Saliency::create( "BING" );
+  Ptr<saliency::Saliency> saliencyAlgorithm = saliency::Saliency::create( "BING" );
 
   TEST_CYCLE_N(1)
   {
     if( training_path.empty() )
     {
-
       FAIL() << "Path of trained files missing! " << endl;
-      return -1;
+      return;
     }
 
     else
     {
-      vector<Vec4i> saliencyMap;
-      saliencyAlgorithm.dynamicCast<ObjectnessBING>()->setTrainingPath( training_path );
-      saliencyAlgorithm.dynamicCast<ObjectnessBING>()->setBBResDir( training_path + "/Results" );
+      saliencyAlgorithm.dynamicCast<saliency::ObjectnessBING>()->setTrainingPath( training_path );
+      saliencyAlgorithm.dynamicCast<saliency::ObjectnessBING>()->setBBResDir( training_path + "/Results" );
 
       if( saliencyAlgorithm->computeSaliency( image, saliencyMap ) )
       {
