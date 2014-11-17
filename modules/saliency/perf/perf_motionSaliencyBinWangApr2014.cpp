@@ -40,14 +40,67 @@
  //M*/
 
 #include "perf_precomp.hpp"
+#include <fstream>
+#include <opencv2/videoio.hpp>
 
-//write sanity: ./bin/opencv_perf_tracking --perf_write_sanity=true
-//verify sanity: ./bin/opencv_perf_tracking
+//write sanity: ./bin/opencv_perf_saliency --perf_write_sanity=true
+//verify sanity: ./bin/opencv_perf_saliency
 
 using namespace std;
 using namespace cv;
 using namespace perf;
-using std::tr1::make_tuple;
-using std::tr1::get;
+
+#define TESTSET_NAMES \
+    "/cv/saliency/motion/blizzard.webm",\
+    "/cv/saliency/motion/pedestrian.webm" ,\
+    "/cv/saliency/motion/snowFall.webm"
+
+const string SALIENCY_DIR = "cv/saliency";
 
 typedef perf::TestBaseWithParam<std::string> sal;
+
+PERF_TEST_P(sal, motionSaliencyBinWangApr2014, testing::Values(TESTSET_NAMES) /*testing::Combine(TESTSET_NAMES, SEGMENTS) */)
+{
+  string filename = getDataPath(GetParam());
+  int startFrame=0;
+  Mat frame;
+  Mat saliencyMap;
+  int videoSize=0;
+
+  Ptr<saliency::Saliency> saliencyAlgorithm = saliency::Saliency::create( "BinWangApr2014" );
+
+  TEST_CYCLE_N(1)
+  {
+    VideoCapture c;
+    c.open( filename);
+    videoSize=c.get( CAP_PROP_FRAME_COUNT);
+    c.set( CAP_PROP_POS_FRAMES, startFrame );
+
+    for ( int frameCounter = 0; frameCounter < videoSize; frameCounter++ )
+    {
+      c >> frame;
+
+      if( frame.empty() )
+      {
+        break;
+      }
+
+      saliencyAlgorithm.dynamicCast<saliency::MotionSaliencyBinWangApr2014>()->setImagesize( frame.cols, frame.rows );
+      saliencyAlgorithm.dynamicCast<saliency::MotionSaliencyBinWangApr2014>()->init();
+
+      if( saliencyAlgorithm->computeSaliency( frame, saliencyMap ) )
+      {
+
+      }
+      else
+      {
+        FAIL()<< "***Error in the instantiation of the saliency algorithm...***\n" << endl;
+        return;
+      }
+
+    }
+  }
+
+  SANITY_CHECK(saliencyMap);
+
+}

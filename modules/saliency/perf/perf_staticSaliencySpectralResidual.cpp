@@ -41,8 +41,8 @@
 
 #include "perf_precomp.hpp"
 
-//write sanity: ./bin/opencv_perf_tracking --perf_write_sanity=true
-//verify sanity: ./bin/opencv_perf_tracking
+//write sanity: ./bin/opencv_perf_saliency --perf_write_sanity=true
+//verify sanity: ./bin/opencv_perf_saliency
 
 using namespace std;
 using namespace cv;

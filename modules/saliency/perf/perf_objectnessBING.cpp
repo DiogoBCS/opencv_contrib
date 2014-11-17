@@ -41,8 +41,8 @@
 
 #include "perf_precomp.hpp"
 
-//write sanity: ./bin/opencv_perf_tracking --perf_write_sanity=true
-//verify sanity: ./bin/opencv_perf_tracking
+//write sanity: ./bin/opencv_perf_saliency --perf_write_sanity=true
+//verify sanity: ./bin/opencv_perf_saliency
 
 using namespace std;
 using namespace cv;
@@ -70,6 +70,7 @@ void getMatOfRects( const vector<Vec4i>& saliencyMap, Mat& bbs_mat )
 PERF_TEST_P(sal, objectnessBING, testing::Values(BING_IMAGES))
 {
   string filename = getDataPath(GetParam());
+  cout<<endl<<endl<<"path "<<filename<<endl<<endl;
   Mat image = imread(filename);
   vector<Vec4i> saliencyMap;
   String training_path = "/home/puja/src/opencv_contrib/modules/saliency/samples/ObjectnessTrainedModel";
@@ -100,7 +101,7 @@ PERF_TEST_P(sal, objectnessBING, testing::Values(BING_IMAGES))
   }  //end CYCLE
 
   //save the bounding boxes in a Mat
-   Mat bbs_mat( saliencyMap.size(), 4, CV_8U );
+   Mat bbs_mat( saliencyMap.size(), 4, CV_32F );
    getMatOfRects( saliencyMap, bbs_mat );
 
    SANITY_CHECK( bbs_mat);
