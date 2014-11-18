@@ -59,7 +59,7 @@ const string SALIENCY_DIR = "cv/saliency";
 
 typedef perf::TestBaseWithParam<std::string> sal;
 
-PERF_TEST_P(sal, motionSaliencyBinWangApr2014, testing::Values(TESTSET_NAMES) /*testing::Combine(TESTSET_NAMES, SEGMENTS) */)
+PERF_TEST_P(sal, motionSaliencyBinWangApr2014, testing::Values(TESTSET_NAMES))
 {
   string filename = getDataPath(GetParam());
   int startFrame=0;
