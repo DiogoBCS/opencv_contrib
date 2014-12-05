@@ -320,58 +320,117 @@ bool inline pairCompare( std::pair<float, float> t, std::pair<float, float> t_pl
 
 }
 
-// Background model maintenance functions
+/*// Background model maintenance functions
+ bool MotionSaliencyBinWangApr2014::templateOrdering()
+ {
+ std::vector<std::pair<float, float> > pixelTemplates( backgroundModel.size() );
+
+ Vec2f* bgModel_0P;
+ Vec2f* bgModel_1P;
+
+ // Scan all pixels of image
+ for ( int i = 0; i < backgroundModel[0]->rows; i++ )
+ {
+ bgModel_0P = backgroundModel[0]->ptr<Vec2f>( i );
+ bgModel_1P = backgroundModel[1]->ptr<Vec2f>( i );
+ for ( int j = 0; j < backgroundModel[0]->cols; j++ )
+ {
+ // scan background model vector from T1 to Tk
+ for ( size_t z = 1; z < backgroundModel.size(); z++ )
+ {
+ Vec2f bgModel_zP = backgroundModel[z]->ptr<Vec2f>( i )[j];
+ // Fill vector of pairs
+ pixelTemplates[z - 1].first = bgModel_zP[0];  // Current B (background value)
+ pixelTemplates[z - 1].second = bgModel_zP[1];  // Current C (efficacy value)
+ }
+
+ //SORT template from T1 to Tk
+ std::sort( pixelTemplates.begin(), pixelTemplates.end(), pairCompare );
+
+ //REFILL CURRENT MODEL ( T1...Tk)
+ for ( size_t zz = 1; zz < backgroundModel.size(); zz++ )
+ {
+ backgroundModel[zz]->ptr<Vec2f>( i )[j][0] = pixelTemplates[zz - 1].first;  // Replace previous B with new ordered B value
+ backgroundModel[zz]->ptr<Vec2f>( i )[j][1] = pixelTemplates[zz - 1].second;  // Replace previous C with new ordered C value
+ }
+
+ // SORT Template T0 and T1
+ if( bgModel_1P[j][1] > thetaL && bgModel_0P[j][1] < thetaL )
+ {
+
+ // swap B value of T0 with B value of T1 (for current model)
+ swap( bgModel_0P[j][0], bgModel_1P[j][0] );
+
+ // set new C0 value for current model)
+ swap( bgModel_0P[j][1], bgModel_1P[j][1] );
+ bgModel_0P[j][1] = (float) gamma * thetaL;
+
+ }
+
+ }
+ }
+
+ return true;
+ }*/
+
 bool MotionSaliencyBinWangApr2014::templateOrdering()
 {
-  std::vector<std::pair<float, float> > pixelTemplates( backgroundModel.size() );
 
-  Vec2f* bgModel_0P;
-  Vec2f* bgModel_1P;
+  Mat dstMask,tempMat, dstMask2, dstMask3;
+  Mat convertMat1, convertMat2;
+  int backGroundModelSize = backgroundModel.size();
 
-// Scan all pixels of image
-  for ( int i = 0; i < backgroundModel[0]->rows; i++ )
+  //Bubble sort : Template T1 - Tk
+  for ( int i = 1; i < backGroundModelSize - 1; i++ )
   {
-    bgModel_0P = backgroundModel[0]->ptr<Vec2f>( i );
-    bgModel_1P = backgroundModel[1]->ptr<Vec2f>( i );
-    for ( int j = 0; j < backgroundModel[0]->cols; j++ )
+    // compare and order the i-th template with the others
+    for ( int j = i + 1; j < backGroundModelSize; j++ )
     {
-      // scan background model vector from T1 to Tk
-      for ( size_t z = 1; z < backgroundModel.size(); z++ )
-      {
-        Vec2f bgModel_zP = backgroundModel[z]->ptr<Vec2f>( i )[j];
-        // Fill vector of pairs
-        pixelTemplates[z - 1].first = bgModel_zP[0];  // Current B (background value)
-        pixelTemplates[z - 1].second = bgModel_zP[1];  // Current C (efficacy value)
-      }
+      backgroundModel[j][1].convertTo( convertMat1, CV_8U );
+      backgroundModel[i][1].convertTo( convertMat2, CV_8U );
+      compare( convertMat1, convertMat2, dstMask, CMP_GT );
+      //compare( backgroundModel[j][1], backgroundModel[i][1], dstMask, CMP_GT );
 
-      //SORT template from T1 to Tk
-      std::sort( pixelTemplates.begin(), pixelTemplates.end(), pairCompare );
+      backgroundModel[i][0].copyTo( tempMat );
+      backgroundModel[j][0].copyTo( backgroundModel[i][0], dstMask );
+      tempMat.copyTo( backgroundModel[j][0], dstMask );
 
-      //REFILL CURRENT MODEL ( T1...Tk)
-      for ( size_t zz = 1; zz < backgroundModel.size(); zz++ )
-      {
-        backgroundModel[zz]->ptr<Vec2f>( i )[j][0] = pixelTemplates[zz - 1].first;  // Replace previous B with new ordered B value
-        backgroundModel[zz]->ptr<Vec2f>( i )[j][1] = pixelTemplates[zz - 1].second;  // Replace previous C with new ordered C value
-      }
-
-      // SORT Template T0 and T1
-      if( bgModel_1P[j][1] > thetaL && bgModel_0P[j][1] < thetaL )
-      {
-
-        // swap B value of T0 with B value of T1 (for current model)
-        swap( bgModel_0P[j][0], bgModel_1P[j][0] );
-
-        // set new C0 value for current model)
-        swap( bgModel_0P[j][1], bgModel_1P[j][1] );
-        bgModel_0P[j][1] = (float) gamma * thetaL;
-
-      }
-
+      backgroundModel[i][1].copyTo( tempMat );
+      backgroundModel[j][1].copyTo( backgroundModel[i][1], dstMask );
+      tempMat.copyTo( backgroundModel[j][1], dstMask );
     }
+
   }
+
+  // SORT Template T0 and T1
+  Mat M_deltaL( backgroundModel[0]->rows, backgroundModel[0]->cols, CV_8U, Scalar( thetaL ) );
+
+  compare( backgroundModel[1][1], M_deltaL, dstMask2, CMP_GT );
+  compare( M_deltaL, backgroundModel[0][1], dstMask3, CMP_GT );
+
+  threshold( dstMask2, dstMask2, 0, 1, THRESH_BINARY );
+  threshold( dstMask3, dstMask3, 0, 1, THRESH_BINARY );
+
+  bitwise_and( dstMask2, dstMask3, dstMask );
+
+  //copy correct B element of T1 inside T0 and swap
+  backgroundModel[0][0].copyTo( tempMat );
+  backgroundModel[1][0].copyTo( backgroundModel[0][0], dstMask );
+  tempMat.copyTo( backgroundModel[1][0], dstMask );
+
+  //copy correct C element of T0 inside T1
+  /*backgroundModel[0][1].copyTo( tempMat );
+  backgroundModel[1][1].copyTo( backgroundModel[0][1], dstMask );
+  tempMat.copyTo( backgroundModel[1][1], dstMask );*/
+  backgroundModel[0][1].copyTo( backgroundModel[1][1], dstMask );
+
+  //set new C0 values as gamma * thetaL
+  M_deltaL.mul( gamma );
+  M_deltaL.copyTo( backgroundModel[0][1], dstMask );
 
   return true;
 }
+
 bool MotionSaliencyBinWangApr2014::templateReplacement( const Mat& finalBFMask, const Mat& image )
 {
   std::vector<Mat> temp;
@@ -542,10 +601,10 @@ bool MotionSaliencyBinWangApr2014::activityControl( const Mat& current_noisePixe
   Mat discordanceFramesNoise, not_current_noisePixelsMask;
   Mat nonZeroIndexes, not_discordanceFramesNoise;  //u_current_noisePixelsMask;
 
-  //current_noisePixelsMask.convertTo( u_current_noisePixelsMask, CV_8UC1 );
+//current_noisePixelsMask.convertTo( u_current_noisePixelsMask, CV_8UC1 );
 
 // Derive the discrepancy between noise in the frame n-1 and frame n
-  //threshold( u_current_noisePixelsMask, not_current_noisePixelsMask, 0.5, 1.0, THRESH_BINARY_INV );
+//threshold( u_current_noisePixelsMask, not_current_noisePixelsMask, 0.5, 1.0, THRESH_BINARY_INV );
   threshold( current_noisePixelsMask, not_current_noisePixelsMask, 0.5, 1.0, THRESH_BINARY_INV );
   bitwise_and( noisePixelMask, not_current_noisePixelsMask, discordanceFramesNoise );
 

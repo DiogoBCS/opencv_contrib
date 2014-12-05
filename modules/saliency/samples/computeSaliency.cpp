@@ -64,6 +64,35 @@ static void help()
 
 int main( int argc, char** argv )
 {
+
+ /* //// COMPARE TEST///
+  Mat test1( 100, 100, CV_8U, Scalar( 255) );
+  Mat test2( 100, 100, CV_8U, Scalar( 0) );
+  Mat dst, tmp;
+
+  for(int i=0; i<(test1.rows/2); i++){
+    for(int j=0; j<test1.cols;j++){
+      test1.at<uchar>(i,j)=0;
+    }
+  }
+
+  threshold(test1, test1, 0, 1, THRESH_BINARY);
+  imshow("Test1_afterCopy", test1);
+
+  compare(test1,test2,dst,CMP_GT);
+
+  imshow("Test1_beforeCopy", test1);
+  imshow("Test2_beforeCopy", test2);
+  imshow("compare results", dst);
+
+  test2.copyTo(tmp);
+  test1.copyTo(test2,dst);
+  tmp.copyTo(test1);
+  imshow("Test2_afterCopy", test2);
+  imshow("Test1_afterCopy", test1);
+  waitKey(0);*/
+
+
   CommandLineParser parser( argc, argv, keys );
 
   String saliency_algorithm = parser.get<String>( 0 );
