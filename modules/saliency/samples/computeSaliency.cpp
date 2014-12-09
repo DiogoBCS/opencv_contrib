@@ -65,33 +65,49 @@ static void help()
 int main( int argc, char** argv )
 {
 
- /* //// COMPARE TEST///
-  Mat test1( 100, 100, CV_8U, Scalar( 255) );
-  Mat test2( 100, 100, CV_8U, Scalar( 0) );
-  Mat dst, tmp;
+  //// COMPARE TEST///
+  /*Mat test1( 100, 100, CV_8UC2, Scalar( 255) );
+   Mat test2( 100, 100, CV_8UC2, Scalar( 0) );
+   Mat dst, tmp;*/
+/*
+  vector<Mat> tmp2;
+  std::vector<Ptr<Mat> > backgroundModel;
+  backgroundModel.resize( 3 + 1 );
 
-  for(int i=0; i<(test1.rows/2); i++){
-    for(int j=0; j<test1.cols;j++){
-      test1.at<uchar>(i,j)=0;
-    }
+  for ( int i = 0; i < 3 + 1; i++ )
+  {
+    Mat* tmpm = new Mat;
+    tmpm->create( 100, 100, CV_8UC2 );
+    tmpm->setTo( Scalar( NAN, 0 ) );
+    Ptr<Mat> tmp = Ptr<Mat>( tmpm );
+    backgroundModel[i] = tmp;
   }
 
-  threshold(test1, test1, 0, 1, THRESH_BINARY);
-  imshow("Test1_afterCopy", test1);
+  split(*backgroundModel.at( 0 ), tmp2);
+  imshow( "Test1_accesso", tmp2[0] );
+  waitKey();*/
 
-  compare(test1,test2,dst,CMP_GT);
+  /*for(int i=0; i<(test1.rows/2); i++){
+   for(int j=0; j<test1.cols;j++){
+   test1.at<uchar>(i,j)=0;
+   }
+   }
 
-  imshow("Test1_beforeCopy", test1);
-  imshow("Test2_beforeCopy", test2);
-  imshow("compare results", dst);
+   threshold(test1, test1, 0, 1, THRESH_BINARY);
+   imshow("Test1_afterCopy", test1);
 
-  test2.copyTo(tmp);
-  test1.copyTo(test2,dst);
-  tmp.copyTo(test1);
-  imshow("Test2_afterCopy", test2);
-  imshow("Test1_afterCopy", test1);
-  waitKey(0);*/
+   compare(test1,test2,dst,CMP_GT);
 
+   imshow("Test1_beforeCopy", test1);
+   imshow("Test2_beforeCopy", test2);
+   imshow("compare results", dst);
+
+   test2.copyTo(tmp);
+   test1.copyTo(test2,dst);
+   tmp.copyTo(test1);
+   imshow("Test2_afterCopy", test2);
+   imshow("Test1_afterCopy", test1);
+   waitKey(0);*/
 
   CommandLineParser parser( argc, argv, keys );
 

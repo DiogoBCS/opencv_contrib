@@ -376,37 +376,48 @@ bool inline pairCompare( std::pair<float, float> t, std::pair<float, float> t_pl
 bool MotionSaliencyBinWangApr2014::templateOrdering()
 {
 
-  Mat dstMask,tempMat, dstMask2, dstMask3;
+  Mat dstMask, tempMat, dstMask2, dstMask3;
   Mat convertMat1, convertMat2;
   int backGroundModelSize = backgroundModel.size();
 
   //Bubble sort : Template T1 - Tk
   for ( int i = 1; i < backGroundModelSize - 1; i++ )
   {
+    std::vector<Mat> channelSplit_i;
+    split( *backgroundModel[i], channelSplit_i );
     // compare and order the i-th template with the others
     for ( int j = i + 1; j < backGroundModelSize; j++ )
     {
-      backgroundModel[j][1].convertTo( convertMat1, CV_8U );
-      backgroundModel[i][1].convertTo( convertMat2, CV_8U );
-      compare( convertMat1, convertMat2, dstMask, CMP_GT );
-      //compare( backgroundModel[j][1], backgroundModel[i][1], dstMask, CMP_GT );
 
-      backgroundModel[i][0].copyTo( tempMat );
-      backgroundModel[j][0].copyTo( backgroundModel[i][0], dstMask );
-      tempMat.copyTo( backgroundModel[j][0], dstMask );
+      std::vector<Mat> channelSplit_j;
+      split( *backgroundModel[j], channelSplit_j );
+      compare( channelSplit_j[1], channelSplit_i[1], dstMask, CMP_GT );
 
-      backgroundModel[i][1].copyTo( tempMat );
-      backgroundModel[j][1].copyTo( backgroundModel[i][1], dstMask );
-      tempMat.copyTo( backgroundModel[j][1], dstMask );
+      channelSplit_i[0].copyTo( tempMat );
+      channelSplit_j[0].copyTo( channelSplit_i[0], dstMask );
+      tempMat.copyTo( channelSplit_j[0], dstMask );
+
+      channelSplit_i[1].copyTo( tempMat );
+      channelSplit_j[1].copyTo( channelSplit_i[1], dstMask );
+      tempMat.copyTo( channelSplit_j[1], dstMask );
+
+      merge( channelSplit_j, *backgroundModel[j] );
     }
-
+    merge( channelSplit_i, *backgroundModel[i] );
   }
 
   // SORT Template T0 and T1
-  Mat M_deltaL( backgroundModel[0]->rows, backgroundModel[0]->cols, CV_8U, Scalar( thetaL ) );
+  Mat M_deltaL( backgroundModel[0]->rows, backgroundModel[0]->cols, CV_32F, Scalar( thetaL ) );
 
-  compare( backgroundModel[1][1], M_deltaL, dstMask2, CMP_GT );
-  compare( M_deltaL, backgroundModel[0][1], dstMask3, CMP_GT );
+  std::vector<Mat> channelSplit_T0;
+  split( *backgroundModel[0], channelSplit_T0 );
+
+  std::vector<Mat> channelSplit_T1;
+  split( *backgroundModel[1], channelSplit_T1 );
+
+  compare( channelSplit_T1[1], M_deltaL, dstMask2, CMP_GT );
+  compare( M_deltaL, channelSplit_T0[1], dstMask3, CMP_GT );
+
 
   threshold( dstMask2, dstMask2, 0, 1, THRESH_BINARY );
   threshold( dstMask3, dstMask3, 0, 1, THRESH_BINARY );
@@ -414,19 +425,19 @@ bool MotionSaliencyBinWangApr2014::templateOrdering()
   bitwise_and( dstMask2, dstMask3, dstMask );
 
   //copy correct B element of T1 inside T0 and swap
-  backgroundModel[0][0].copyTo( tempMat );
-  backgroundModel[1][0].copyTo( backgroundModel[0][0], dstMask );
-  tempMat.copyTo( backgroundModel[1][0], dstMask );
+  channelSplit_T0[0].copyTo( tempMat );
+  channelSplit_T1[0].copyTo( channelSplit_T0[0], dstMask );
+  tempMat.copyTo( channelSplit_T1[0], dstMask );
 
   //copy correct C element of T0 inside T1
-  /*backgroundModel[0][1].copyTo( tempMat );
-  backgroundModel[1][1].copyTo( backgroundModel[0][1], dstMask );
-  tempMat.copyTo( backgroundModel[1][1], dstMask );*/
-  backgroundModel[0][1].copyTo( backgroundModel[1][1], dstMask );
+  channelSplit_T0[1].copyTo( channelSplit_T1[1], dstMask );
 
   //set new C0 values as gamma * thetaL
   M_deltaL.mul( gamma );
-  M_deltaL.copyTo( backgroundModel[0][1], dstMask );
+  M_deltaL.copyTo( channelSplit_T0[1], dstMask );
+
+  merge( channelSplit_T1, *backgroundModel[1] );
+  merge( channelSplit_T0, *backgroundModel[0] );
 
   return true;
 }
@@ -691,9 +702,22 @@ bool MotionSaliencyBinWangApr2014::computeSaliencyImpl( const InputArray image, 
     decisionThresholdAdaptation();
   }
 
+  //double t = (double) getTickCount();
+
   templateOrdering();
+
+  //t = ( (double) getTickCount() - t ) / getTickFrequency();
+  //std::cout << "T :" << t << std::endl;
+
   templateReplacement( saliencyMap.getMat(), image.getMat() );
+
+  //double t2 = (double) getTickCount();
+
   templateOrdering();
+
+  //t2 = ( (double) getTickCount() - t2 ) / getTickFrequency();
+  //std::cout << "T2 :" << t2 << std::endl;
+
   activityControlFlag = true;
 
   return true;
