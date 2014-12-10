@@ -154,6 +154,8 @@ bool MotionSaliencyBinWangApr2014::fullResolutionDetection( const Mat& image2, M
         {
 
           counter += (int) backgroundModel[z]->ptr<Vec2f>( i )[j][1];
+          if( counter != 0 )
+            break;
         }
 
         if( counter != 0 )  //if at least the first template is activated / initialized
@@ -320,59 +322,6 @@ bool inline pairCompare( std::pair<float, float> t, std::pair<float, float> t_pl
 
 }
 
-/*// Background model maintenance functions
- bool MotionSaliencyBinWangApr2014::templateOrdering()
- {
- std::vector<std::pair<float, float> > pixelTemplates( backgroundModel.size() );
-
- Vec2f* bgModel_0P;
- Vec2f* bgModel_1P;
-
- // Scan all pixels of image
- for ( int i = 0; i < backgroundModel[0]->rows; i++ )
- {
- bgModel_0P = backgroundModel[0]->ptr<Vec2f>( i );
- bgModel_1P = backgroundModel[1]->ptr<Vec2f>( i );
- for ( int j = 0; j < backgroundModel[0]->cols; j++ )
- {
- // scan background model vector from T1 to Tk
- for ( size_t z = 1; z < backgroundModel.size(); z++ )
- {
- Vec2f bgModel_zP = backgroundModel[z]->ptr<Vec2f>( i )[j];
- // Fill vector of pairs
- pixelTemplates[z - 1].first = bgModel_zP[0];  // Current B (background value)
- pixelTemplates[z - 1].second = bgModel_zP[1];  // Current C (efficacy value)
- }
-
- //SORT template from T1 to Tk
- std::sort( pixelTemplates.begin(), pixelTemplates.end(), pairCompare );
-
- //REFILL CURRENT MODEL ( T1...Tk)
- for ( size_t zz = 1; zz < backgroundModel.size(); zz++ )
- {
- backgroundModel[zz]->ptr<Vec2f>( i )[j][0] = pixelTemplates[zz - 1].first;  // Replace previous B with new ordered B value
- backgroundModel[zz]->ptr<Vec2f>( i )[j][1] = pixelTemplates[zz - 1].second;  // Replace previous C with new ordered C value
- }
-
- // SORT Template T0 and T1
- if( bgModel_1P[j][1] > thetaL && bgModel_0P[j][1] < thetaL )
- {
-
- // swap B value of T0 with B value of T1 (for current model)
- swap( bgModel_0P[j][0], bgModel_1P[j][0] );
-
- // set new C0 value for current model)
- swap( bgModel_0P[j][1], bgModel_1P[j][1] );
- bgModel_0P[j][1] = (float) gamma * thetaL;
-
- }
-
- }
- }
-
- return true;
- }*/
-
 bool MotionSaliencyBinWangApr2014::templateOrdering()
 {
 
@@ -380,44 +329,37 @@ bool MotionSaliencyBinWangApr2014::templateOrdering()
   Mat convertMat1, convertMat2;
   int backGroundModelSize = backgroundModel.size();
 
+  std::vector<std::vector<Mat> > channelSplit( backGroundModelSize );
+  for ( int i = 0; i < backGroundModelSize; i++ )
+  {
+    split( *backgroundModel[i], channelSplit[i] );
+
+  }
+
   //Bubble sort : Template T1 - Tk
   for ( int i = 1; i < backGroundModelSize - 1; i++ )
   {
-    std::vector<Mat> channelSplit_i;
-    split( *backgroundModel[i], channelSplit_i );
     // compare and order the i-th template with the others
     for ( int j = i + 1; j < backGroundModelSize; j++ )
     {
 
-      std::vector<Mat> channelSplit_j;
-      split( *backgroundModel[j], channelSplit_j );
-      compare( channelSplit_j[1], channelSplit_i[1], dstMask, CMP_GT );
+      compare( channelSplit[j][1], channelSplit[i][1], dstMask, CMP_GT );
 
-      channelSplit_i[0].copyTo( tempMat );
-      channelSplit_j[0].copyTo( channelSplit_i[0], dstMask );
-      tempMat.copyTo( channelSplit_j[0], dstMask );
+      channelSplit[i][0].copyTo( tempMat );
+      channelSplit[j][0].copyTo( channelSplit[i][0], dstMask );
+      tempMat.copyTo( channelSplit[j][0], dstMask );
 
-      channelSplit_i[1].copyTo( tempMat );
-      channelSplit_j[1].copyTo( channelSplit_i[1], dstMask );
-      tempMat.copyTo( channelSplit_j[1], dstMask );
-
-      merge( channelSplit_j, *backgroundModel[j] );
+      channelSplit[i][1].copyTo( tempMat );
+      channelSplit[j][1].copyTo( channelSplit[i][1], dstMask );
+      tempMat.copyTo( channelSplit[j][1], dstMask );
     }
-    merge( channelSplit_i, *backgroundModel[i] );
   }
 
   // SORT Template T0 and T1
   Mat M_deltaL( backgroundModel[0]->rows, backgroundModel[0]->cols, CV_32F, Scalar( thetaL ) );
 
-  std::vector<Mat> channelSplit_T0;
-  split( *backgroundModel[0], channelSplit_T0 );
-
-  std::vector<Mat> channelSplit_T1;
-  split( *backgroundModel[1], channelSplit_T1 );
-
-  compare( channelSplit_T1[1], M_deltaL, dstMask2, CMP_GT );
-  compare( M_deltaL, channelSplit_T0[1], dstMask3, CMP_GT );
-
+  compare( channelSplit[1][1], M_deltaL, dstMask2, CMP_GT );
+  compare( M_deltaL, channelSplit[0][1], dstMask3, CMP_GT );
 
   threshold( dstMask2, dstMask2, 0, 1, THRESH_BINARY );
   threshold( dstMask3, dstMask3, 0, 1, THRESH_BINARY );
@@ -425,19 +367,21 @@ bool MotionSaliencyBinWangApr2014::templateOrdering()
   bitwise_and( dstMask2, dstMask3, dstMask );
 
   //copy correct B element of T1 inside T0 and swap
-  channelSplit_T0[0].copyTo( tempMat );
-  channelSplit_T1[0].copyTo( channelSplit_T0[0], dstMask );
-  tempMat.copyTo( channelSplit_T1[0], dstMask );
+  channelSplit[0][0].copyTo( tempMat );
+  channelSplit[1][0].copyTo( channelSplit[0][0], dstMask );
+  tempMat.copyTo( channelSplit[1][0], dstMask );
 
   //copy correct C element of T0 inside T1
-  channelSplit_T0[1].copyTo( channelSplit_T1[1], dstMask );
+  channelSplit[0][1].copyTo( channelSplit[1][1], dstMask );
 
   //set new C0 values as gamma * thetaL
   M_deltaL.mul( gamma );
-  M_deltaL.copyTo( channelSplit_T0[1], dstMask );
+  M_deltaL.copyTo( channelSplit[0][1], dstMask );
 
-  merge( channelSplit_T1, *backgroundModel[1] );
-  merge( channelSplit_T0, *backgroundModel[0] );
+  for ( int i = 0; i < backGroundModelSize; i++ )
+  {
+    merge( channelSplit[i], *backgroundModel[i] );
+  }
 
   return true;
 }
@@ -706,9 +650,9 @@ bool MotionSaliencyBinWangApr2014::computeSaliencyImpl( const InputArray image, 
 
   templateOrdering();
 
-  //t = ( (double) getTickCount() - t ) / getTickFrequency();
-  //std::cout << "T :" << t << std::endl;
-
+  /*t = ( (double) getTickCount() - t ) / getTickFrequency();
+   std::cout << "T :" << t << std::endl;
+   */
   templateReplacement( saliencyMap.getMat(), image.getMat() );
 
   //double t2 = (double) getTickCount();
