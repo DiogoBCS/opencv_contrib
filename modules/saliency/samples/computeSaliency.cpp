@@ -64,6 +64,7 @@ static void help()
 
 int main( int argc, char** argv )
 {
+
   CommandLineParser parser( argc, argv, keys );
 
   String saliency_algorithm = parser.get<String>( 0 );
@@ -164,6 +165,10 @@ int main( int argc, char** argv )
       {
 
         cap >> frame;
+        if( frame.empty() )
+        {
+          return 0;
+        }
         cvtColor( frame, frame, COLOR_BGR2GRAY );
 
         Mat saliencyMap;
